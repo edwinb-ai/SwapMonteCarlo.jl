@@ -62,7 +62,8 @@ packing fraction `η`,
 
 Less accurate than [`hs_fluid_Z_kolafa`](@ref): it underestimates Z by up to about
 0.3 % in the fluid (−0.08 % at ρ = 0.3, −0.27 % at ρ = 0.6, −0.12 % at freezing; see
-`check_references.jl`), which matters for long, precise runs. Note the argument is `η`, not `ρ`.
+`check_references.jl`), which matters for long, precise runs. Note the argument is `η`,
+not `ρ`.
 
 Reference: N. F. Carnahan and K. E. Starling, "Equation of state for nonattracting rigid
 spheres", J. Chem. Phys. 51, 635 (1969).
@@ -152,8 +153,11 @@ function density_from_pressure(Zfun, βP; bracket, rtol=1e-13, maxiter=200)
     f(ρ) = ρ * Zfun(ρ) - βP
     flo, fhi = f(lo), f(hi)
     if !(flo <= 0 <= fhi)
-        throw(ArgumentError("βP = $βP is not bracketed by ρ ∈ $bracket " *
-                            "(ρZ - βP = $flo, $fhi)"))
+        throw(
+            ArgumentError(
+                "βP = $βP is not bracketed by ρ ∈ $bracket " * "(ρZ - βP = $flo, $fhi)"
+            ),
+        )
     end
     for _ in 1:maxiter
         mid = (lo + hi) / 2
