@@ -22,6 +22,22 @@ Optional:
 abstract type MCMove end
 
 """
+    attempt!(move, sys, cond, rng) -> Bool
+
+Propose a change of `sys` with `move`, accept or reject it with the Metropolis rule at
+the external conditions `cond` (a `NamedTuple` such as `(; kT)` or `(; kT, pressure)`, see
+[`conditions`](@ref)), record the outcome and return whether it was accepted. A rejected
+attempt leaves `sys` unchanged.
+
+All moves use the Metropolis rule with the threshold drawn first: with `ξ = randexp(rng)`
+and `ln A = -ΔU/kT + bias`, a move is accepted iff `U_new ≤ U_max := U_old + kT (bias +
+ξ)`. Since `P(ξ ≥ x) = e^{-x}`, this happens with probability `min(1, A)`. A zero energy
+change is always accepted, also at `kT = 0` (a quench), and `U_max` is known before the
+new energy is computed, so energy sums of repulsive potentials stop early.
+"""
+function attempt! end
+
+"""
     MoveStats()
 
 Number of attempted and accepted moves since the last [`reset_stats!`](@ref).
