@@ -33,7 +33,8 @@ end
 Build a system from Cartesian `positions` (wrapped into the box) and `diameters`,
 converted to the box's float type `T`. Throws an `ArgumentError` if the lengths do not
 match, the largest cutoff does not fit in the box (minimum image convention), the
-potential is not symmetric in the diameters, or the initial energy is not finite.
+potential is not symmetric in the diameters or not zero beyond its cutoff, or the initial
+energy is not finite.
 """
 function System(
     box::AbstractBox{D,T},
@@ -67,6 +68,7 @@ function System(
         ),
     )
     check_symmetry(potential, σ, Xoshiro(0x5eed))
+    check_cutoff(potential, σ, Xoshiro(0x5eed))
     cells = CellList(frac, box, rc)
     sys = System(frac, σ, box, potential, cells, rc, zero(T))
     energy = total_energy(sys)

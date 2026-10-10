@@ -46,7 +46,7 @@ end
 
 hard =
     if isdefined(SMC, :HardSphere) &&
-       hasmethod(pair_energy, Tuple{SMC.HardSphere,Float64,Float64,Float64})
+        hasmethod(pair_energy, Tuple{SMC.HardSphere,Float64,Float64,Float64})
         SMC.HardSphere()
     else
         IHardSphere()
@@ -180,4 +180,16 @@ end
     # Impossible packings fail.
     box = SMC.box_for_packing_fraction(Val(2), ones(100), 0.9)
     @test_throws ErrorException SMC.insert_hard_spheres(rng, box, ones(100); max_tries=1000)
+end
+
+# A potential that is not truncated by its own `pair_energy`.
+struct Untruncated <: Potential end
+pair_energy(::Untruncated, r2, σi, σj) = inv(r2)^6
+cutoff(::Untruncated, σi, σj) = 1.5
+
+@testset "potentials must vanish beyond their cutoff" begin
+    box = CubicBox(Val(2), 10.0)
+    x = lattice_positions(box, 16)
+    @test_throws ArgumentError System(box, x, ones(16), Untruncated())
+    @test System(box, x, ones(16), GaussianCore(; rc=3.0)) isa System
 end

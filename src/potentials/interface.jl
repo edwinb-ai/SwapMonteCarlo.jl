@@ -148,3 +148,32 @@ function check_symmetry(pot::Potential, diameters::AbstractVector, rng; npairs::
     end
     return nothing
 end
+
+"""
+    check_cutoff(pot, diameters, rng; npairs=256)
+
+Throw an `ArgumentError` if `pair_energy` is not exactly zero beyond the pair cutoff for
+randomly chosen pairs of `diameters`. Energy sums visit every particle of the neighboring
+cells, also those beyond the cutoff, so a potential that is not truncated by its own
+`pair_energy` would give results that depend on the cell geometry.
+"""
+function check_cutoff(pot::Potential, diameters::AbstractVector, rng; npairs::Int=256)
+    n = length(diameters)
+    for _ in 1:npairs
+        σi = diameters[rand(rng, 1:n)]
+        σj = diameters[rand(rng, 1:n)]
+        rc = cutoff(pot, σi, σj)
+        # Just beyond the cutoff and somewhat further out.
+        for r in (nextfloat(float(rc)), (1 + rand(rng)) * rc)
+            u = pair_energy(pot, r^2, σi, σj)
+            iszero(u) || throw(
+                ArgumentError(
+                    "pair_energy of $(typeof(pot)) must be exactly zero beyond the " *
+                    "cutoff, but u(r = $(r)) = $(u) for diameters $(σi) and $(σj) " *
+                    "with cutoff $(rc)",
+                ),
+            )
+        end
+    end
+    return nothing
+end
