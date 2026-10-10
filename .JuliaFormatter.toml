@@ -1,1 +1,3 @@
 style = "blue"
+# Verbatim copy of the original script, kept unformatted on purpose.
+ignore = ["benchmark/baseline/swapmc_original.jl"]

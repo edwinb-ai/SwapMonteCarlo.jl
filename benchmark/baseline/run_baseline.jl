@@ -168,35 +168,57 @@ function main()
         e0 = Orig.total_energy(st.particles, st.cell_list, R_CUT) / N
         σs = [p.sigma for p in st.particles]
         @printf("initial (seeded lattice) U/N = %.12f\n", e0)
-        @printf("  sum(σ) = %.12f, σ[1] = %.15f, σ[end] = %.15f\n",
-            sum(σs), σs[1], σs[end])
+        @printf("  sum(σ) = %.12f, σ[1] = %.15f, σ[end] = %.15f\n", sum(σs), σs[1], σs[end])
         @printf("deterministic lattice U/N   = %.12f\n", deterministic_energy(N))
-        @printf("cells per side = %d, cell size = %.4f, L = %.4f\n",
-            st.cell_list.n_cells, st.cell_list.cell_size, st.L)
+        @printf(
+            "cells per side = %d, cell size = %.4f, L = %.4f\n",
+            st.cell_list.n_cells,
+            st.cell_list.cell_size,
+            st.L
+        )
 
         t = @elapsed delta = warmup!(st, 100, beta, DELTA0)
-        @printf("warm-up: 100 sweeps in %.1f s, δ = %.4f, U/N = %.6f\n", t, delta,
-            Orig.total_energy(st.particles, st.cell_list, R_CUT) / N)
+        @printf(
+            "warm-up: 100 sweeps in %.1f s, δ = %.4f, U/N = %.6f\n",
+            t,
+            delta,
+            Orig.total_energy(st.particles, st.cell_list, R_CUT) / N
+        )
 
-        for (label, ps) in (("displacement (p_swap=0)", 0.0), ("swap (p_swap=1)", 1.0),
-            ("mixed (p_swap=0.2)", P_SWAP))
+        for (label, ps) in (
+            ("displacement (p_swap=0)", 0.0),
+            ("swap (p_swap=1)", 1.0),
+            ("mixed (p_swap=0.2)", P_SWAP),
+        )
             acc = Ref((0, 0, 0, 0))
-            ns, b = time_per_attempt(n -> (acc[] = attempts!(st, n, beta, delta, ps)), nfast)
+            ns, b = time_per_attempt(
+                n -> (acc[] = attempts!(st, n, beta, delta, ps)), nfast
+            )
             da, dn, sa, sn = acc[]
-            @printf("mc_step! %-24s %9.1f ns/attempt %8.1f B/attempt  acc disp %.3f swap %.3f\n",
-                label, ns, b, dn > 0 ? da / dn : NaN, sn > 0 ? sa / sn : NaN)
+            @printf(
+                "mc_step! %-24s %9.1f ns/attempt %8.1f B/attempt  acc disp %.3f swap %.3f\n",
+                label,
+                ns,
+                b,
+                dn > 0 ? da / dn : NaN,
+                sn > 0 ? sa / sn : NaN
+            )
         end
 
         ns, b = time_per_attempt(
             n -> for _ in 1:n
                 Orig.total_energy(st.particles, st.cell_list, R_CUT)
-            end, max(10, nasis ÷ 2))
+            end,
+            max(10, nasis ÷ 2),
+        )
         @printf("total_energy alone              %12.1f ns/call    %10.1f B/call\n", ns, b)
 
-        ns, b = time_per_attempt(n -> attempts_asis!(st, n, beta, delta, P_SWAP), nasis;
-            reps=2)
-        @printf("as-is (mc_step! + total_energy) %12.1f ns/attempt %10.1f B/attempt\n",
-            ns, b)
+        ns, b = time_per_attempt(
+            n -> attempts_asis!(st, n, beta, delta, P_SWAP), nasis; reps=2
+        )
+        @printf(
+            "as-is (mc_step! + total_energy) %12.1f ns/attempt %10.1f B/attempt\n", ns, b
+        )
         @printf("  -> as-is sweep (N attempts) ≈ %.3f s\n", ns * N * 1e-9)
         println()
     end
