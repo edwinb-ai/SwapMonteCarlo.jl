@@ -23,7 +23,7 @@ using Pkg: Pkg
 Pkg.develop(; path="/path/to/SwapMonteCarlo.jl")
 ```
 
-or from its repository (placeholder URL),
+or from its GitHub repository,
 
 ```julia
 using Pkg: Pkg

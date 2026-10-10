@@ -13,7 +13,7 @@ using Pkg: Pkg
 Pkg.develop(; path="/path/to/SwapMonteCarlo.jl")
 ```
 
-or from its repository (placeholder URL) with
+or from its GitHub repository with
 `Pkg.add(; url="https://github.com/edwinb-ai/SwapMonteCarlo.jl")`.
 
 The code examples on this page are run when the documentation is built, with small
