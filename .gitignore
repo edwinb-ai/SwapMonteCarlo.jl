@@ -1,0 +1,13 @@
+Manifest.toml
+**/Manifest.toml
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+*.xyz
+*.dat
+*.jls
+benchmark/results*
+validation/results/*.dat
+validation/output/
+examples/output/
+.vscode/
