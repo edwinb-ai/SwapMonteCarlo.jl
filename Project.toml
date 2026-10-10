@@ -1,7 +1,7 @@
 name = "SwapMonteCarlo"
 uuid = "2613fd77-1dd0-448c-bdb1-104fdaa37f0b"
 authors = ["edwinb-ai <e.a.bedollamontiel@uu.nl>"]
-version = "0.1.0"
+version = "1.0.0"
 
 [deps]
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
