@@ -72,6 +72,6 @@ public MixingRule, mix, ShiftMode, SizeDistribution, quantile
 public Ensemble, conditions, MCMove, attempt!, name, MoveStats, AdaptiveStep, record!
 public adaptive_step, move_stats, check_compatible, adapt!
 public Observer, observe!, Quantity, measure, label, isdue
-public Schedule, particle_energy, total_virial, check_energy, sync_energy!
+public Schedule, particle_energy, total_virial, check_energy, sync_energy!, energy_type
 
 end

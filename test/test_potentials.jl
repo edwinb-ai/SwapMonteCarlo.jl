@@ -139,7 +139,21 @@ end
     @test p.shift === EnergyShift()
     @test p.mixing === Additive()
     @test !p.tail_correction
-    @test_throws ArgumentError LennardJones(; tail_correction=true, mixing=NonAdditive(0.1))
+    @test_throws ArgumentError LennardJones(;
+        tail_correction=true, shift=NoShift(), mixing=NonAdditive(0.1)
+    )
+    # Shifted potentials with tail corrections would report a pressure off by the
+    # impulsive term, so they are rejected, with an explanation.
+    for shift in (EnergyShift(), ForceShift())
+        @test_throws ArgumentError LennardJones(; tail_correction=true, shift)
+    end
+    msg = try
+        LennardJones(; tail_correction=true)
+    catch err
+        sprint(showerror, err)
+    end
+    @test occursin("NoShift", msg) && occursin("impulsive", msg)
+    @test LennardJones(; tail_correction=true, shift=NoShift()).tail_correction
     @test_throws ArgumentError LennardJones(; epsilon=0.0)
     @test_throws ArgumentError LennardJones(; xc=-1.0)
 end
@@ -158,9 +172,11 @@ end
         @test SMC.pressure_lrc(p, sys) ≈ Pref rtol = 1e-9
         @test SMC.energy_lrc(p, sys) < 0
         @test SMC.pressure_lrc(p, sys) < 0
-        # The corrections do not depend on the shift mode.
-        q = LennardJones(; xc, tail_correction=true, shift=ForceShift())
-        @test SMC.energy_lrc(q, sys) == SMC.energy_lrc(p, sys)
+        # Tail corrections are only consistent with the plain truncation.
+        @test_throws ArgumentError LennardJones(; xc, tail_correction=true)
+        @test_throws ArgumentError LennardJones(;
+            xc, tail_correction=true, shift=ForceShift()
+        )
         # Without tail corrections they vanish.
         r = LennardJones(; xc)
         @test SMC.energy_lrc(r, sys) === 0.0
@@ -168,7 +184,7 @@ end
     end
     # Textbook monodisperse formulas in 3D.
     if name == "monodisperse" && D == 3
-        p = LennardJones(; tail_correction=true)
+        p = LennardJones(; tail_correction=true, shift=NoShift())
         N = length(σs)
         ρ = N / volume(box)
         sr3 = 1 / 2.5^3
@@ -177,7 +193,7 @@ end
     end
     # Float32 systems get Float32 corrections.
     sys32 = (; diameters=Float32.(σs), box=CubicBox(Val(D), 7.5f0))
-    p = LennardJones(; tail_correction=true)
+    p = LennardJones(; tail_correction=true, shift=NoShift())
     @test SMC.energy_lrc(p, sys32) isa Float32
     @test SMC.energy_lrc(p, sys32) ≈ SMC.energy_lrc(p, sys) rtol = 1e-5
 end

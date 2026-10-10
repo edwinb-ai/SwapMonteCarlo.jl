@@ -162,29 +162,42 @@ function particle_energy(
 end
 
 """
+    round_up(T, x)
+
+`x` converted to the float type `T`, rounded up, so that `round_up(T, x) >= x`. The
+identity if `x` is already of type `T`.
+"""
+@inline round_up(::Type{T}, x::T) where {T<:AbstractFloat} = x
+@inline round_up(::Type{T}, x::AbstractFloat) where {T<:AbstractFloat} = T(x, RoundUp)
+
+"""
     total_energy(sys; emax=Inf)
 
 Total potential energy recomputed from scratch, including the long range correction
 [`energy_lrc`](@ref). Does not modify `sys` (see [`sync_energy!`](@ref)).
 
-For repulsive potentials the sum stops as soon as it exceeds `emax`, and `Inf` is
-returned.
+The particle energies are computed in the float type `T` of the system and summed in the
+wider type [`energy_type`](@ref)`(T)`, which is also the type of the result. For
+repulsive potentials the sum stops as soon as it exceeds `emax`, and `Inf` is returned.
 """
-function total_energy(sys::System{D,T}; emax::Real=T(Inf)) where {D,T}
-    lrc = convert(T, energy_lrc(sys.potential, sys))
-    limit = T(emax) - lrc
-    e = zero(T)
+function total_energy(sys::System{D,T}; emax::Real=Inf) where {D,T}
+    E = energy_type(T)
+    lrc = convert(E, energy_lrc(sys.potential, sys))
+    limit = E(emax) - lrc
+    e = zero(E)
     frac = sys.frac
     diameters = sys.diameters
     for i in eachindex(frac)
         # Half sum: particle `i` interacts with the particles `j > i` only.
         budget = limit - e
-        p = pair_sum(sys, frac[i], diameters[i], 0, 0, i, budget)
+        # The early exit of the kernel compares in `T`; with the budget rounded up, a sum
+        # that stops early certainly exceeds the exact budget.
+        p = pair_sum(sys, frac[i], diameters[i], 0, 0, i, round_up(T, budget))
         # Compare the partial sum with its own budget: after rounding, `e + p` could
         # equal `limit` although the sum stopped early. Return a value that is certainly
         # larger than `emax`.
         if is_repulsive(sys.potential) && p > budget
-            return T(Inf)
+            return E(Inf)
         end
         e += p
     end
@@ -195,10 +208,10 @@ end
     total_virial(sys)
 
 Total virial `W = Σ_{i<j} w(r_ij)` with the pair virial `w = -r du/dr`, see
-[`pair_virial`](@ref).
+[`pair_virial`](@ref), summed in the type [`energy_type`](@ref)`(T)`.
 """
 function total_virial(sys::System{D,T}) where {D,T}
-    w = zero(T)
+    w = zero(energy_type(T))
     for i in eachindex(sys.frac)
         w += virial_sum(sys, i, i)
     end
@@ -209,13 +222,21 @@ end
     pressure(sys, kT)
 
 Virial pressure at temperature `kT`, `N kT / V + W / (D V)` plus the long range correction
-[`pressure_lrc`](@ref). Not defined for hard potentials (use `VirtualPressure`).
+[`pressure_lrc`](@ref), in the type [`energy_type`](@ref)`(T)`. Not defined for hard
+potentials (use `VirtualPressure`).
+
+The pair virial only covers distances inside the cutoff. A potential that jumps at its
+cutoff, such as `LennardJones(; shift=NoShift())`, has an additional impulsive
+contribution that is not included unless the tail correction of the potential contains
+it (see [`LennardJones`](@ref)), so that the average virial pressure in an NPT
+simulation then differs from the imposed pressure.
 """
 function pressure(sys::System{D,T}, kT::Real) where {D,T}
+    E = energy_type(T)
     V = volume(sys)
     ideal = length(sys) * T(kT) / V
     excess = total_virial(sys) / (D * V)
-    return ideal + excess + convert(T, pressure_lrc(sys.potential, sys))
+    return ideal + excess + convert(E, convert(T, pressure_lrc(sys.potential, sys)))
 end
 
 """

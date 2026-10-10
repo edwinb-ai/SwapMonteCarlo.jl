@@ -193,3 +193,38 @@ cutoff(::Untruncated, σi, σj) = 1.5
     @test_throws ArgumentError System(box, x, ones(16), Untruncated())
     @test System(box, x, ones(16), GaussianCore(; rc=3.0)) isa System
 end
+
+# A potential whose cutoff is negative for unlike pairs only, which are not among the
+# pairs of extreme diameters checked first by `System`.
+struct NegativeCutoff <: Potential end
+pair_energy(::NegativeCutoff, r2, σi, σj) = zero(r2)
+cutoff(::NegativeCutoff, σi, σj) = σi + σj == 2.5 ? -1.0 : 1.0
+
+@testset "negative pair diameters and cutoffs" begin
+    # With NonAdditive(0.9), ε (σmax - σmin) = 1.08 > 1 gives a negative pair diameter.
+    m = NonAdditive(0.9)
+    @test SMC.mix(m, 1.0, 2.2) < 0
+    box = CubicBox(Val(2), 30.0)
+    x = lattice_positions(box, 100)
+    σ = [isodd(k) ? 1.0 : 2.2 for k in 1:100]
+    for pot in
+        (PolySoftSphere(; mixing=m), HardSphere(; mixing=m), LennardJones(; mixing=m))
+        @test_throws ArgumentError System(box, x, σ, pot)
+    end
+    msg = try
+        System(box, x, σ, PolySoftSphere(; mixing=m))
+    catch err
+        sprint(showerror, err)
+    end
+    @test occursin("NonAdditive", msg) && occursin("1.0 and 2.2", msg)
+    # Diameters closer together are fine.
+    @test System(
+        box, x, [isodd(k) ? 1.0 : 1.5 for k in 1:100], PolySoftSphere(; mixing=m)
+    ) isa System
+    # Negative cutoffs of sampled pairs are rejected by `check_cutoff` itself.
+    @test_throws ArgumentError SMC.check_cutoff(NegativeCutoff(), [1.0, 1.5], Xoshiro(1))
+    @test SMC.check_cutoff(NegativeCutoff(), [1.0, 2.0], Xoshiro(1)) === nothing
+    @test_throws ArgumentError System(
+        box, x, [isodd(k) ? 1.0 : 1.5 for k in 1:100], NegativeCutoff()
+    )
+end

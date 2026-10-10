@@ -18,7 +18,8 @@ Optional:
   - `pair_virial(pot, r2, σi, σj) -> -r du/dr`, needed for the virial pressure.
   - `is_repulsive(pot)`: `true` if every pair energy is non-negative (allows early
     rejection of moves).
-  - `is_hard(pot)`: `true` if pair energies are either zero or infinite.
+  - `is_hard(pot)`: `true` if pair energies are either zero or infinite and
+    non-increasing in the distance (expanding the box never creates an overlap).
   - `energy_lrc(pot, sys)`, `pressure_lrc(pot, sys)`: long range corrections.
   - `max_cutoff(pot, diameters)`: largest pair cutoff in a set of diameters.
 
@@ -105,7 +106,15 @@ is_repulsive(::Potential) = false
 """
     is_hard(pot) -> Bool
 
-Whether pair energies are either zero or infinite (hard-core potentials).
+Whether the potential is a hard-core potential. Returning `true` is a promise that every
+pair energy is either zero or infinite, and that it is non-increasing in the distance
+`r`, so that a pair that does not overlap never overlaps at a larger distance.
+
+Moves rely on both properties: in a valid configuration all energies are zero, so old
+energies are not computed, and a [`VolumeMove`](@ref) that expands the box skips the
+energy entirely, since increasing all distances can never create an infinite pair. A
+potential that is infinite on a shell `a < r < b` and zero for `r < a` is not
+non-increasing, so it must not be declared hard.
 """
 is_hard(::Potential) = false
 
@@ -152,10 +161,11 @@ end
 """
     check_cutoff(pot, diameters, rng; npairs=256)
 
-Throw an `ArgumentError` if `pair_energy` is not exactly zero beyond the pair cutoff for
-randomly chosen pairs of `diameters`. Energy sums visit every particle of the neighboring
-cells, also those beyond the cutoff, so a potential that is not truncated by its own
-`pair_energy` would give results that depend on the cell geometry.
+Throw an `ArgumentError` if the pair cutoff is negative, or if `pair_energy` is not
+exactly zero beyond the pair cutoff, for randomly chosen pairs of `diameters`. Energy sums
+visit every particle of the neighboring cells, also those beyond the cutoff, so a
+potential that is not truncated by its own `pair_energy` would give results that depend
+on the cell geometry.
 """
 function check_cutoff(pot::Potential, diameters::AbstractVector, rng; npairs::Int=256)
     n = length(diameters)
@@ -163,6 +173,12 @@ function check_cutoff(pot::Potential, diameters::AbstractVector, rng; npairs::In
         σi = diameters[rand(rng, 1:n)]
         σj = diameters[rand(rng, 1:n)]
         rc = cutoff(pot, σi, σj)
+        rc >= 0 || throw(
+            ArgumentError(
+                "the cutoff of $(typeof(pot)) must be non-negative, but it is $(rc) for " *
+                "diameters $(σi) and $(σj)",
+            ),
+        )
         # Just beyond the cutoff and somewhat further out.
         for r in (nextfloat(float(rc)), (1 + rand(rng)) * rc)
             u = pair_energy(pot, r^2, σi, σj)

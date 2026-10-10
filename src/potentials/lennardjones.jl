@@ -9,7 +9,8 @@ abstract type ShiftMode end
 """
     NoShift()
 
-Plain truncation: the energy jumps to zero at the cutoff.
+Plain truncation: the energy jumps to zero at the cutoff. The jump adds an impulsive term
+to the pressure that the pair virial does not include, see [`LennardJones`](@ref).
 """
 struct NoShift <: ShiftMode end
 
@@ -46,8 +47,27 @@ and are precomputed.
   - `mixing`: mixing rule, see [`Additive`](@ref) and [`NonAdditive`](@ref).
   - `tail_correction`: add the standard long range corrections of the full (untruncated)
     potential beyond the cutoff to the energy and pressure, see [`energy_lrc`](@ref).
-    Only available with `Additive` mixing. With a shifted potential these corrections
-    account only for the missing tail, not for the shift inside the cutoff.
+    Only available with `Additive` mixing and `shift=NoShift()`, see below.
+
+# Pressure of the truncated potential
+
+The plain truncation ([`NoShift`](@ref)) makes the energy jump by `-u(rc)` at the cutoff,
+which adds an impulsive term `P_imp = S_D/(2D) ρ² rc^D u(rc) g(rc)` (`S_D` the surface of
+the unit sphere, negative for Lennard-Jones) to the pressure. Volume moves sample the
+pressure of the energy that is simulated, so they include this term, but the pair virial
+(computed for `r < rc`) does not. The standard pressure tail correction contains it with
+`g(rc) = 1`, while the energy tail correction does not. Therefore:
+
+  - `NoShift()` with `tail_correction=true` (the convention of the NIST reference data)
+    gives a virial pressure, see [`pressure`](@ref), consistent with the sampled one up to
+    `g(rc) - 1`, and approximates the full potential;
+  - `EnergyShift()` and `ForceShift()` without tail corrections are continuous at the
+    cutoff, so the virial pressure is exact;
+  - `NoShift()` without tail corrections has a virial pressure that misses `P_imp`.
+
+The first two are recommended. The remaining combination, a shifted potential with tail
+corrections, would report a pressure off by `P_imp` (with `g = 1`) and is rejected with an
+`ArgumentError`.
 """
 struct LennardJones{T<:AbstractFloat,M<:MixingRule,S<:ShiftMode} <: Potential
     epsilon::T
@@ -74,6 +94,17 @@ function LennardJones(;
             ArgumentError(
                 "tail corrections of LennardJones are only implemented for Additive " *
                 "mixing, got $(mixing)",
+            ),
+        )
+    end
+    if tail_correction && !(shift isa NoShift)
+        throw(
+            ArgumentError(
+                "tail corrections of LennardJones require shift=NoShift(), got " *
+                "$(shift): the pressure tail correction contains the impulsive term of " *
+                "a potential that jumps at the cutoff, so with a shifted potential the " *
+                "virial pressure would not match the sampled pressure. Use " *
+                "NoShift() with tail corrections, or a shifted potential without them",
             ),
         )
     end
@@ -139,7 +170,9 @@ end
 """
     pair_virial(pot::LennardJones, r2, σi, σj)
 
-Lennard-Jones pair virial `-r du/dr`, consistent with the shift mode of `pot`.
+Lennard-Jones pair virial `-r du/dr` for `r` inside the cutoff, the derivative of the
+(possibly shifted) pair energy. Zero beyond the cutoff: for `NoShift` the impulsive term of
+the jump at the cutoff is not included (see [`LennardJones`](@ref)).
 """
 @inline function pair_virial(p::LennardJones, r2, σi, σj)
     F = pair_float_type(r2, σi, σj)
@@ -226,6 +259,10 @@ end
 Standard tail correction to the pressure, `P_lrc = S_D/(2 D V²) Σ_ij ∫_rc^∞ w_ij r^(D-1)
 dr` with the pair virial `w = -r du/dr` of the full Lennard-Jones potential. Zero unless
 `pot.tail_correction`.
+
+Integrating by parts, `P_lrc = U_lrc / V + P_imp` with the impulsive term `P_imp` of the
+jump at the cutoff for `g(rc) = 1`, which is why tail corrections are only allowed with
+`NoShift`, see [`LennardJones`](@ref).
 """
 function pressure_lrc(p::LennardJones, sys)
     T = eltype(sys.diameters)

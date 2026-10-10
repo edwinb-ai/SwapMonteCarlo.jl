@@ -288,6 +288,40 @@ end
     @test issorted(energies; rev=true)
 end
 
+@testset "ensemble validation" begin
+    # Constant temperatures and pressures are checked by the constructors.
+    @test NVT(0.0) isa NVT
+    for kT in (Inf, -Inf, NaN, -1.0)
+        @test_throws ArgumentError NVT(kT)
+        @test_throws ArgumentError NPT(kT, 1.0)
+    end
+    @test_throws ArgumentError NPT(0.0, 1.0)
+    @test_throws ArgumentError NPT(1.0, Inf)
+    @test_throws ArgumentError NPT(1.0, NaN)
+    @test NPT(1.0, -1.0) isa NPT
+    # Callables are checked at every sweep, after the conversion to the system's type.
+    ramp = NVT(LinearRamp(1.0, -1.0, 10))
+    @test SMC.conditions(ramp, 5, Float64).kT == 0
+    @test_throws ArgumentError SMC.conditions(ramp, 6, Float64)
+    msg = try
+        SMC.conditions(ramp, 6, Float64)
+    catch err
+        sprint(showerror, err)
+    end
+    @test occursin("sweep 6", msg) && occursin("temperature", msg)
+    @test_throws ArgumentError SMC.conditions(NVT(s -> 1e40), 1, Float32)
+    @test_throws ArgumentError SMC.conditions(NPT(LinearRamp(1.0, 0.0, 4), 1.0), 4, Float64)
+    @test_throws ArgumentError SMC.conditions(NPT(1.0, s -> s > 2 ? Inf : 1.0), 3, Float64)
+    @test SMC.conditions(NPT(1.0, s -> s > 2 ? Inf : 1.0), 2, Float64) ==
+        (; kT=1.0, pressure=1.0)
+    # A run stops at the first invalid sweep.
+    sim = Simulation(
+        sim_soft_system(test_rng(11); N=16), ramp, Displacement(0.1) => 1; seed=1
+    )
+    @test_throws ArgumentError run!(sim, 20)
+    @test sim.sweep == 6
+end
+
 @testset "acceptance rates and step sizes" begin
     sim = sim_standard(17)
     acc = acceptance_rate(sim)

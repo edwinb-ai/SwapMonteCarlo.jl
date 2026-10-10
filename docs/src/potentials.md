@@ -69,9 +69,9 @@ truncated at ``r_c = x_c \sigma_{ij}``, with one of three shift modes:
 Since the cutoff is relative to ``\sigma_{ij}``, the shift constants do not depend on
 the diameters. The force-shifted potential needs a square root inside the cutoff.
 
-With `tail_correction=true` (only for `Additive` mixing) the standard long range
-corrections of the full potential beyond the cutoff are added, assuming ``g(r) = 1``
-there:
+With `tail_correction=true` (only for `Additive` mixing and `shift=NoShift()`) the
+standard long range corrections of the full potential beyond the cutoff are added,
+assuming ``g(r) = 1`` there:
 
 ```math
 U_\text{lrc} = \frac{S_D}{2V} \sum_{i,j} \int_{r_c}^\infty u_\text{LJ}(r)\, r^{D-1}\,dr,
@@ -84,10 +84,14 @@ with ``S_2 = 2\pi``, ``S_3 = 4\pi`` and ``w = -r\,du/dr``. The integrals are
 the double sum over all ordered pairs (including ``i = j``, the usual convention) is
 computed in ``O(N)`` from the moments ``\sum_i \sigma_i^k`` by the binomial expansion of
 ``(\sigma_i + \sigma_j)^D``. See [`energy_lrc`](@ref SwapMonteCarlo.energy_lrc) and
-[`pressure_lrc`](@ref SwapMonteCarlo.pressure_lrc). For a shifted potential these
-corrections only account for the missing tail, not for the shift inside the cutoff; see
-also [the pressure of truncated potentials](@ref "Truncated potentials and the impulsive
-term").
+[`pressure_lrc`](@ref SwapMonteCarlo.pressure_lrc). The pressure correction contains the
+impulsive term of the energy jump at the cutoff, so it is only consistent with the
+virial pressure of the plain truncation; a shifted potential with
+`tail_correction=true` throws an `ArgumentError`. Truncated without shift and without
+tail corrections, the virial pressure misses the impulsive term. The recommended choices
+are `NoShift()` with tail corrections (the convention of the NIST reference data) or
+`EnergyShift()`/`ForceShift()` without them; see [the pressure of truncated
+potentials](@ref "Truncated potentials and the impulsive term").
 
 ### Hard spheres
 
@@ -127,7 +131,10 @@ cost) that gives the pair diameter:
 The non-additive rule of Ninarello *et al.* prevents fractionation and crystallization of
 polydisperse mixtures. Restricting ``\varepsilon \ge 0`` guarantees ``\sigma_{ij} \le
 \max(\sigma_i, \sigma_j)``, so the largest cutoff is always that of a pair of extreme
-diameters. Custom potentials can use the rules through
+diameters. The pair diameters are positive only if
+``\varepsilon(\sigma_\text{max} - \sigma_\text{min}) < 1``; a [`System`](@ref) whose
+diameters give negative pair diameters throws an `ArgumentError`. Custom potentials can
+use the rules through
 [`mix`](@ref SwapMonteCarlo.mix):
 
 ```jldoctest
@@ -149,7 +156,7 @@ functions are public but not exported, so `import` them to add methods):
 | `cutoff(pot, σi, σj)` | yes | distance beyond which the pair energy is exactly zero |
 | `pair_virial(pot, r2, σi, σj)` | for [`Pressure`](@ref) | ``w = -r\,du/dr`` |
 | `is_repulsive(pot)` | no | `true` if all pair energies are ``\ge 0`` (early rejection) |
-| `is_hard(pot)` | no | `true` if pair energies are either ``0`` or ``\infty`` |
+| `is_hard(pot)` | no | `true` if pair energies are either ``0`` or ``\infty`` and non-increasing in ``r`` |
 | `energy_lrc(pot, sys)`, `pressure_lrc(pot, sys)` | no | long range corrections (default zero) |
 | `max_cutoff(pot, diameters)` | no | largest pair cutoff (default: the extreme diameters) |
 
@@ -161,6 +168,8 @@ Requirements:
   and throws an `ArgumentError` if it fails.
 - `is_repulsive(pot) = true` is a promise: the energy sums of a move stop as soon as they
   exceed the acceptance threshold, which is only exact if no later term can be negative.
+- `is_hard(pot) = true` is a promise as well: pair energies are ``0`` or ``\infty`` and
+  non-increasing in the distance, so that expanding the box never creates an overlap.
 - The arguments are of the float type of the system (`Float64` by default, `Float32` if
   the box is `Float32`). Return `zero(r2)` rather than `0.0` to keep kernels type stable;
   results are converted to the float type of the system.
@@ -236,8 +245,9 @@ A hard potential returns `Inf` for overlapping pairs and zero otherwise, and dec
 `is_hard(pot) = true` and `is_repulsive(pot) = true`. Moves then skip the energy of the
 old configuration (it is zero), volume expansions skip the energy altogether, and
 [`Pressure`](@ref) throws; use [`VirtualPressure`](@ref), which counts the pairs whose
-energy becomes infinite after a small compression. See [`HardSphere`](@ref) for a
-complete example.
+energy becomes infinite after a small compression. Skipping expansions requires the pair
+energy to be non-increasing in the distance: a pair that does not overlap must not
+overlap at a larger distance. See [`HardSphere`](@ref) for a complete example.
 
 ### Long range corrections and custom cutoffs
 

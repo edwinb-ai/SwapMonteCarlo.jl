@@ -15,26 +15,44 @@ Cartesian coordinates and stored internally as fractional coordinates in `[0, 1)
   - `potential::P`: pair potential.
   - `cells::C`: cell list used for neighbor searches.
   - `rc::T`: largest pair cutoff, see [`max_cutoff`](@ref).
-  - `energy::T`: running total energy, including long range corrections.
+  - `energy::E`: running total energy, including long range corrections, in the wider
+    type `E = energy_type(T)` (`Float64` for `Float32` systems), see
+    [`energy_type`](@ref).
 """
-mutable struct System{D,T<:AbstractFloat,B<:AbstractBox{D,T},P<:Potential,C}
+mutable struct System{
+    D,T<:AbstractFloat,B<:AbstractBox{D,T},P<:Potential,C,E<:AbstractFloat
+}
     const frac::Vector{SVector{D,T}}
     const diameters::Vector{T}
     box::B
     const potential::P
     const cells::C
     const rc::T
-    energy::T
+    energy::E
 end
+
+"""
+    energy_type(T) -> Type
+
+Floating point type of the total energy and virial of a system with float type `T`:
+`Float64` for `T = Float32` (or `Float16`), and `T` itself for `Float64` and wider types.
+
+Total sums run over `N` particles, so in single precision their rounding error grows with
+`N` and would dominate the energy change of a volume move, which is the difference of two
+total energies (several `kT` for `N = 10^5`). Pair energies, particle energies and the
+energy changes of local moves are still computed in `T`.
+"""
+energy_type(::Type{T}) where {T<:AbstractFloat} = float(promote_type(T, Float64))
 
 """
     System(box::AbstractBox{D,T}, positions, diameters, potential)
 
 Build a system from Cartesian `positions` (wrapped into the box) and `diameters`,
 converted to the box's float type `T`. Throws an `ArgumentError` if the lengths do not
-match, the largest cutoff does not fit in the box (minimum image convention), the
-potential is not symmetric in the diameters or not zero beyond its cutoff, or the initial
-energy is not finite.
+match, a pair cutoff is negative or not finite (e.g. a [`NonAdditive`](@ref) mixing rule
+with `ε (σmax - σmin) > 1`), the largest cutoff does not fit in the box (minimum image
+convention), the potential is not symmetric in the diameters or not zero beyond its
+cutoff, or the initial energy is not finite.
 """
 function System(
     box::AbstractBox{D,T},
@@ -61,6 +79,7 @@ function System(
     rc = T(max_cutoff(potential, σ))
     (isfinite(rc) && rc >= 0) ||
         throw(ArgumentError("the largest pair cutoff must be finite, got $(rc)"))
+    check_extreme_cutoffs(potential, σ)
     fits_cutoff(box, rc) || throw(
         ArgumentError(
             "the largest pair cutoff rc = $(rc) exceeds half the smallest box width " *
@@ -70,7 +89,7 @@ function System(
     check_symmetry(potential, σ, Xoshiro(0x5eed))
     check_cutoff(potential, σ, Xoshiro(0x5eed))
     cells = CellList(frac, box, rc)
-    sys = System(frac, σ, box, potential, cells, rc, zero(T))
+    sys = System(frac, σ, box, potential, cells, rc, zero(energy_type(T)))
     energy = total_energy(sys)
     isfinite(energy) || throw(
         ArgumentError(
@@ -80,6 +99,28 @@ function System(
     )
     sys.energy = energy
     return sys
+end
+
+"""
+    check_extreme_cutoffs(potential, diameters)
+
+Throw an `ArgumentError` if a pair cutoff among the smallest and largest of `diameters`
+is negative or not finite. A [`NonAdditive`](@ref) mixing rule gives negative pair
+diameters (and cutoffs) when `ε (σmax - σmin) > 1`.
+"""
+function check_extreme_cutoffs(potential::Potential, diameters::AbstractVector)
+    (a, b) = extrema(diameters)
+    for (σi, σj) in ((a, a), (a, b), (b, b))
+        rc = cutoff(potential, σi, σj)
+        (isfinite(rc) && rc >= 0) || throw(
+            ArgumentError(
+                "the pair cutoff of diameters $(σi) and $(σj) is $(rc), but it must be " *
+                "non-negative and finite; a NonAdditive(ε) mixing rule requires " *
+                "ε (σmax - σmin) < 1",
+            ),
+        )
+    end
+    return nothing
 end
 
 """

@@ -16,14 +16,16 @@ version is below 1.0, a minor version (0.x) may break the API.
   (`OrthorhombicBox`, `CubicBox`), with positions stored in fractional coordinates and
   the dimension and float type taken from the types.
 - `System(box, positions, diameters, potential)` with a cell list, a running total
-  energy, and the accessors `positions`, `diameters`, `volume`, `density`,
-  `packing_fraction`, `total_energy` and `pressure`.
+  energy (summed in `Float64` also for `Float32` systems, see `energy_type`), and the
+  accessors `positions`, `diameters`, `volume`, `density`, `packing_fraction`,
+  `total_energy` and `pressure`.
 - Built-in pair potentials: `PolySoftSphere` (the SS12 potential of Ninarello, Berthier
   and Coslovich, C² at its cutoff), `LennardJones` (`NoShift`, `EnergyShift` or
-  `ForceShift`, optional tail corrections of the energy and pressure in 2D and 3D),
+  `ForceShift`, optional tail corrections of the energy and pressure in 2D and 3D with
+  `NoShift`, the convention of the NIST reference data),
   `HardSphere` and `PseudoHS` (the (50, 49) pseudo hard sphere potential).
 - Mixing rules `Additive()` and `NonAdditive(ε)` for the pair diameter of every built-in
-  potential.
+  potential; a `System` whose diameters give negative pair diameters is rejected.
 - Extension interface for user-defined potentials: `pair_energy` and `cutoff`, optional
   `pair_virial`, `is_repulsive`, `is_hard`, `energy_lrc`, `pressure_lrc` and
   `max_cutoff`. Potentials written for MolecularDynamics.jl with
@@ -35,7 +37,8 @@ version is below 1.0, a minor version (0.x) may break the API.
   `lattice_positions`, `random_positions` and `insert_hard_spheres` (random sequential
   insertion).
 - Ensembles `NVT(kT)` and `NPT(kT, pressure)`, with the temperature and the pressure
-  either constant or functions of the sweep, such as `LinearRamp` and `ExponentialRamp`.
+  either constant or functions of the sweep, such as `LinearRamp` and `ExponentialRamp`,
+  and checked to be finite (and the temperature non-negative) at every sweep.
 - Moves `Displacement`, `Swap` (exchange of the diameters of two particles, with an
   optional `max_dsigma`) and `VolumeMove` (isotropic, uniform in `ln V`), all with the
   Metropolis rule with the threshold drawn first, which never evaluates `exp` and stops
@@ -51,7 +54,8 @@ version is below 1.0, a minor version (0.x) may break the API.
 - Extended XYZ input and output compatible with MolecularDynamics.jl, OVITO and ASE
   (`write_extxyz`, `read_extxyz`), written with full precision.
 - Checkpoints of the complete simulation state, including the random number generator
-  (`save_checkpoint`, `load_checkpoint`), for bitwise reproducible restarts.
+  (`save_checkpoint`, `load_checkpoint`), for bitwise reproducible restarts; a
+  simulation given the task-local default generator owns a copy of it.
 - Unit and statistical test groups (`SWAPMC_TEST_GROUP`), validation references,
   a benchmark of the original `swapmc.jl` script, examples and a Documenter.jl manual
   built locally.

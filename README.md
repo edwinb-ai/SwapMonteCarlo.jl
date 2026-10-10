@@ -192,7 +192,7 @@ against each other.
 | Potential | Pair energy for $`r < r_c`$ | $`r_c`$ |
 |---|---|---|
 | `PolySoftSphere(; epsilon, xc=1.25, mixing=NonAdditive(0.2))` | $`\varepsilon[(\sigma_{ij}/r)^{12} + c_0 + c_2 (r/\sigma_{ij})^2 + c_4 (r/\sigma_{ij})^4]`$, $`C^2`$ at $`r_c`$ | $`x_c \sigma_{ij}`$ |
-| `LennardJones(; epsilon, xc=2.5, shift=EnergyShift(), mixing=Additive(), tail_correction=false)` | $`4\varepsilon[(\sigma_{ij}/r)^{12} - (\sigma_{ij}/r)^6]`$, `NoShift()`, `EnergyShift()` or `ForceShift()` | $`x_c \sigma_{ij}`$ |
+| `LennardJones(; epsilon, xc=2.5, shift=EnergyShift(), mixing=Additive(), tail_correction=false)` | $`4\varepsilon[(\sigma_{ij}/r)^{12} - (\sigma_{ij}/r)^6]`$, `NoShift()`, `EnergyShift()` or `ForceShift()` (tail corrections only with `NoShift()`) | $`x_c \sigma_{ij}`$ |
 | `HardSphere(; mixing=Additive())` | $`\infty`$ (overlap) | $`\sigma_{ij}`$ |
 | `PseudoHS(; epsilon, mixing=Additive())` | (50, 49) Mie potential shifted at its minimum | $`(50/49)\sigma_{ij}`$ |
 
@@ -201,8 +201,10 @@ against each other.
 The pair diameter $`\sigma_{ij}`$ of every built-in potential comes from its mixing rule:
 `Additive()`, $`\sigma_{ij} = (\sigma_i + \sigma_j)/2`$, or `NonAdditive(ε)`,
 $`\sigma_{ij} = \tfrac{1}{2}(\sigma_i + \sigma_j)(1 - \varepsilon|\sigma_i - \sigma_j|)`$ with
-$`0 \le \varepsilon < 1`$ (Ninarello *et al.*). Custom potentials can use them through
-`SwapMonteCarlo.mix(rule, σi, σj)`.
+$`0 \le \varepsilon < 1`$ (Ninarello *et al.*), which needs
+$`\varepsilon(\sigma_\text{max} - \sigma_\text{min}) < 1`$ for positive pair diameters (a
+`System` with negative ones throws an `ArgumentError`). Custom potentials can use them
+through `SwapMonteCarlo.mix(rule, σi, σj)`.
 
 ```julia
 PolySoftSphere(; mixing=Additive())
@@ -261,10 +263,13 @@ exactly when the energy is a continuous function of the volume: potentials conti
 their cutoff (`PolySoftSphere`, `PseudoHS`, `LennardJones` with `EnergyShift()` or
 `ForceShift()`) without tail corrections. A truncated potential with a jump at the cutoff
 (`LennardJones(; shift=NoShift())`) has an impulsive contribution
-$`\frac{S_D}{2D}\rho^2 r_c^D u(r_c)\, g(r_c)`$ that the pair virial misses. The standard
-pressure tail correction contains this term with $`g(r_c) = 1`$, so `NoShift()` with
-`tail_correction=true` is consistent up to $`g(r_c) - 1`$, whereas a shifted potential with
-`tail_correction=true` is not. The documentation has the details.
+$`\frac{S_D}{2D}\rho^2 r_c^D u(r_c)\, g(r_c)`$ that the pair virial misses, so its
+`Pressure()` is off by this term without tail corrections. The standard pressure tail
+correction contains this term with $`g(r_c) = 1`$, so `NoShift()` with
+`tail_correction=true` (the NIST convention) is consistent up to $`g(r_c) - 1`$, whereas a
+shifted potential with tail corrections is not and is rejected with an `ArgumentError`.
+Use `NoShift()` with `tail_correction=true`, or `EnergyShift()`/`ForceShift()` without tail
+corrections. The documentation has the details.
 
 ## Observers and output
 

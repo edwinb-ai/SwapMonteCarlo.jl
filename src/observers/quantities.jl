@@ -66,6 +66,10 @@ label(::PotentialEnergy) = "energy"
 
 Virial pressure, see [`pressure`](@ref), at the temperature of the current sweep. Not
 defined for hard potentials; use [`VirtualPressure`](@ref) for those.
+
+For a potential that jumps at its cutoff without a tail correction, such as
+`LennardJones(; shift=NoShift())`, the pair virial misses the impulsive term of the jump,
+so in NPT the average differs from the imposed pressure; see [`LennardJones`](@ref).
 """
 struct Pressure <: Quantity end
 function measure(::Pressure, sim)

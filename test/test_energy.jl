@@ -166,9 +166,13 @@ end
         @test allocs(f, sys.cells, 5, s, sys.frac[5]) == 0
         @test (@inferred SMC.particle_energy(sys, 5)) isa T
         @test (@inferred SMC.particle_energy(sys, s, T(1), 0, 0, T(Inf))) isa T
-        @test (@inferred total_energy(sys)) isa T
-        @test (@inferred SMC.total_virial(sys)) isa T
-        @test (@inferred pressure(sys, 1.0)) isa T
+        # Total sums are accumulated in the wider energy type.
+        E = SMC.energy_type(T)
+        @test sys.energy isa E
+        @test (@inferred total_energy(sys)) isa E
+        @test (@inferred total_energy(sys; emax=T(10))) isa E
+        @test (@inferred SMC.total_virial(sys)) isa E
+        @test (@inferred pressure(sys, 1.0)) isa E
         @test (@inferred SMC.cells_valid(sys.cells, sys.box, sys.rc)) isa Bool
     end
 end
@@ -178,7 +182,8 @@ end
     for D in (2, 3), (name, pot) in energy_potentials
         sys = make_system(rng, D, 200, 0.6, pot; T=Float32)
         @test eltype(sys.frac) == SVector{D,Float32}
-        @test sys.energy isa Float32
+        @test SMC.particle_energy(sys, 1) isa Float32
+        @test sys.energy isa Float64
         x = [Float64.(xi) for xi in positions(sys)]
         L = Float64.(sys.box.lengths)
         σ = Float64.(sys.diameters)
@@ -186,4 +191,56 @@ end
         @test SMC.particle_energy(sys, 3) ≈
             brute_particle_energy(L, x, σ, pot, x[3], σ[3], (3,)) rtol = 1e-4 atol = 1e-4
     end
+end
+
+@testset "energy type" begin
+    @test SMC.energy_type(Float64) == Float64
+    @test SMC.energy_type(Float32) == Float64
+    @test SMC.energy_type(Float16) == Float64
+    @test SMC.energy_type(BigFloat) == BigFloat
+end
+
+@testset "Float32 energy differences of volume moves" begin
+    # The energy change of a volume move is the difference of two total energies. Summed
+    # in single precision, their rounding errors grow with N and reach several kT for
+    # N = 10^5; summed in double precision, the difference agrees with that of an
+    # identical double precision configuration up to the (local) single precision
+    # rounding of the pair energies.
+    rng = test_rng(17)
+    N = 20_000
+    σ32 = Float32.(sample_diameters(rng, InversePowerLaw(0.73, 1.62), N))
+    L = Float32(SMC.box_for_density(Val(2), N, 1.0).lengths[1])
+    box32 = CubicBox(Val(2), L)
+    x32 = [
+        x + 0.05f0 * SVector{2,Float32}(randn(rng, 2)) for x in lattice_positions(box32, N)
+    ]
+    pot = PolySoftSphere()
+    s32 = System(box32, x32, σ32, pot)
+    # The same configuration (fractional coordinates and diameters) in double precision.
+    s64 = System(CubicBox(Val(2), Float64(L)), positions(s32), Float64.(σ32), pot)
+    copyto!(s64.frac, [Float64.(s) for s in s32.frac])
+    SMC.rebuild_cells!(s64)
+    SMC.sync_energy!(s64)
+    @test s32.energy isa Float64
+    @test abs(s32.energy - s64.energy) < 1e-4 * abs(s64.energy)
+    errors = Float64[]
+    for _ in 1:20
+        f = exp(0.002f0 * (2 * rand(rng, Float32) - 1) / 2)
+        (b32, b64) = (s32.box, s64.box)
+        (U32, U64) = (total_energy(s32), total_energy(s64))
+        s32.box = SMC.scale(b32, f)
+        s64.box = OrthorhombicBox(Float64.(s32.box.lengths))
+        for s in (s32, s64)
+            SMC.cells_valid(s.cells, s.box, s.rc) || SMC.rebuild_cells!(s)
+        end
+        push!(errors, (total_energy(s32) - U32) - (total_energy(s64) - U64))
+        s32.box = b32
+        s64.box = b64
+        for s in (s32, s64)
+            SMC.cells_valid(s.cells, s.box, s.rc) || SMC.rebuild_cells!(s)
+        end
+    end
+    # About 0.005 (and 0.7 to 1 when summed in single precision), small compared with
+    # the temperatures of supercooled soft spheres (kT ≈ 0.1).
+    @test maximum(abs, errors) < 0.02
 end

@@ -10,7 +10,11 @@ set of moves for every simulation, since they hold acceptance counters and step 
 
 The random number generator is `Xoshiro(seed)` by default, with a random `seed` that is
 stored (and written to output headers) so that a run can be reproduced. If `rng` is
-given, `seed` is only informative.
+given, `seed` is only informative. The task-local default generator
+(`Random.default_rng()`) keeps its state in the running task, so it could not be saved in
+a checkpoint: the simulation then owns an independent copy of it, a `Xoshiro` with the
+same state, which the simulation advances without affecting the task-local generator
+(and vice versa).
 
 The constructor checks that the weights are positive and finite, that the move names are
 unique, that each move is compatible with the ensemble and that [`NPT`](@ref) is used
@@ -19,7 +23,8 @@ system whose particles all have the same diameter.
 
 # Fields
 
-  - `system`, `ensemble`, `moves::Tuple`, `rng`.
+  - `system`, `ensemble`, `moves::Tuple`, `rng` (a copy of the task-local generator, see
+    above).
   - `cumweights::NTuple{K,Float64}`: normalized cumulative move weights.
   - `seed::UInt64`: seed of the default random number generator.
   - `sweep::Int`: number of sweeps done so far.
@@ -46,7 +51,10 @@ function Simulation(
     movetuple = map(first, moves)
     cumweights = cumulative_weights(map(last, moves))
     check_moves(system, ensemble, movetuple)
-    return Simulation(system, ensemble, movetuple, cumweights, rng, UInt64(seed), 0)
+    # Serializing the task-local generator stores no state, so checkpoints of a
+    # simulation that used it would not be reproducible; own a copy of it instead.
+    own_rng = rng isa Random.TaskLocalRNG ? copy(rng) : rng
+    return Simulation(system, ensemble, movetuple, cumweights, own_rng, UInt64(seed), 0)
 end
 
 """

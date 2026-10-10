@@ -15,8 +15,8 @@ Rev. X 7, 021039, 2017).
 - 2D and 3D periodic orthorhombic boxes; the dimension and the floating point type are
   part of the types, so every kernel is specialized and type stable.
 - Built-in potentials: the smoothed soft spheres of Ninarello *et al.*
-  ([`PolySoftSphere`](@ref)), [`LennardJones`](@ref) (truncated, energy- or
-  force-shifted, with optional tail corrections), [`HardSphere`](@ref) and the
+  ([`PolySoftSphere`](@ref)), [`LennardJones`](@ref) (truncated with optional tail
+  corrections, energy- or force-shifted), [`HardSphere`](@ref) and the
   pseudo hard sphere potential [`PseudoHS`](@ref), each with an additive or non-additive
   mixing rule.
 - User-defined pair potentials with two methods, and MolecularDynamics.jl potentials

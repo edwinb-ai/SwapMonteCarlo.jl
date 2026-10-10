@@ -211,7 +211,12 @@ compares with the imposed pressure as follows:
 | continuous at ``r_c`` (`PolySoftSphere`, `PseudoHS`, `EnergyShift`, `ForceShift`), no tail correction | ``0`` |
 | `NoShift`, no tail correction | ``-P_\text{imp}`` |
 | `NoShift`, `tail_correction=true` | ``\frac{S_D}{2D}\rho^2 r_c^D u(r_c)\,[1 - g(r_c)] \approx 0`` |
-| `EnergyShift` or `ForceShift`, `tail_correction=true` | ``P_\text{imp}\rvert_{g(r_c) = 1}`` |
+
+A shifted potential with tail corrections would add ``P_\text{imp}|_{g(r_c) = 1}`` to the
+virial pressure although its energy has no jump, so [`LennardJones`](@ref) rejects
+`tail_correction=true` unless `shift=NoShift()`. Use `NoShift` with tail corrections, or
+`EnergyShift` or `ForceShift` without them. `NoShift` without tail corrections is allowed,
+but its virial pressure misses ``P_\text{imp}``.
 
 In ``NVT`` the same terms decide which pressure the virial estimates. The NIST
 Lennard-Jones reference data, for example, use `NoShift` with tail corrections, so that
@@ -225,6 +230,13 @@ sweeps (1000 by default); a relative mismatch larger than ``10^{-8}`` gives a wa
 the running energy is replaced by the recomputed one.
 [`check_energy`](@ref SwapMonteCarlo.check_energy) and
 [`sync_energy!`](@ref SwapMonteCarlo.sync_energy!) do the same by hand.
+
+Pair and particle energies, and the energy changes of displacements and swaps, are
+computed in the float type of the system. Total energies and virials, and the running
+energy, use the wider type [`energy_type`](@ref SwapMonteCarlo.energy_type), which is
+`Float64` for a `Float32` system: the energy change of a volume move is the difference of
+two total energies, and summed in single precision their rounding errors grow with ``N``
+and would reach several ``k_BT`` for ``N = 10^5``.
 
 ## Custom moves
 

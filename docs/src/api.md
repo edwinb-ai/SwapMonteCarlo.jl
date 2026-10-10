@@ -87,6 +87,7 @@ particle_energy
 total_virial
 check_energy
 sync_energy!
+energy_type
 ```
 
 ## Initialization

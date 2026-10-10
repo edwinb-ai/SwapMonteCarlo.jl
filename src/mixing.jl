@@ -22,6 +22,10 @@ Non-additive mixing rule of Ninarello, Berthier and Coslovich (PRX 7, 021039, 20
 
 Restricting to `ε ≥ 0` guarantees that `σij ≤ max(σi, σj)`, so the largest pair cutoff is
 always the one between the two largest particles.
+
+The pair diameters are positive only if `ε |σi - σj| < 1`, so the diameters of a system
+must satisfy `ε (σmax - σmin) < 1` (for `ε = 0.2`, `σmax - σmin < 5`). A
+[`System`](@ref) with negative pair diameters throws an `ArgumentError`.
 """
 struct NonAdditive{T<:AbstractFloat} <: MixingRule
     epsilon::T

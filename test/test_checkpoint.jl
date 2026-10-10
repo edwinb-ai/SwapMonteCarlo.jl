@@ -101,3 +101,29 @@ end
         @test identical(restored, sim)
     end
 end
+
+@testset "checkpoint with the task-local random number generator" begin
+    # The task-local generator stores no state when serialized, so the simulation owns a
+    # copy of it.
+    Random.seed!(42)
+    rng = Random.default_rng()
+    state = copy(rng)
+    sim = Simulation(
+        ckpt_sim(33).system, NVT(1.0), Displacement(0.1) => 1, Swap() => 0.2; rng=rng
+    )
+    @test sim.rng isa Xoshiro
+    @test sim.rng == state
+    run!(sim, 5)
+    # Running the simulation does not advance the task-local generator.
+    @test copy(Random.default_rng()) == state
+    mktempdir() do dir
+        path = joinpath(dir, "state.jls")
+        save_checkpoint(path, sim)
+        run!(sim, 10)
+        # Using the task-local generator in between does not affect the restart.
+        rand(Random.default_rng(), 100)
+        restored = load_checkpoint(path)
+        run!(restored, 10)
+        @test identical(restored, sim)
+    end
+end

@@ -128,7 +128,7 @@ const MV_CONFIGS = [
     ("LennardJones", LennardJones(), mv_narrow, (0.6, 0.35), 1.0, 0.5, 0.4, 0.1),
     (
         "LennardJones tail",
-        LennardJones(; tail_correction=true),
+        LennardJones(; tail_correction=true, shift=NoShift()),
         mv_narrow,
         (0.6, 0.35),
         1.0,
@@ -389,7 +389,7 @@ end
         for _ in 1:2000, m in moves
             SMC.attempt!(m, sys, cond, rng)
         end
-        @test sys.energy isa T
+        @test sys.energy isa SMC.energy_type(T)
         @test sys.energy ≈ total_energy(sys) rtol = (T == Float32 ? 1e-3 : 1e-10)
         for m in moves
             @test allocs(SMC.attempt!, m, sys, cond, rng) == 0

@@ -33,7 +33,8 @@ readable. Sibling of MolecularDynamics.jl and follows its conventions.
    MolecularDynamics.jl-style `evaluate(pot, r, σi, σj) -> (u, f)` also works.
    `pair_energy` must be symmetric in `(σi, σj)`; checked with `check_symmetry`.
 4. **Mixing rules** (`src/mixing.jl`, done) are a type parameter of each potential:
-   `Additive()`, `NonAdditive(ε)` with `0 ≤ ε < 1`.
+   `Additive()`, `NonAdditive(ε)` with `0 ≤ ε < 1`; `System` rejects negative pair
+   cutoffs (`ε (σmax - σmin) > 1`).
 5. **Metropolis acceptance with a threshold drawn first.** Draw `ξ = randexp(rng, T)`;
    accept iff `ln A ≥ -ξ`, with `ln A = -ΔU/kT + bias`. Equivalently
    `U_new ≤ U_max := U_old + kT * (bias + ξ)` (`≤` so that `ΔU = 0` is always accepted,
@@ -60,7 +61,9 @@ Cartesian out), `wrap_fractional(s)`, `fits_cutoff(box, rc)`, `dimension(box)`.
 - `LennardJones(; epsilon=1.0, xc=2.5, shift=EnergyShift(), mixing=Additive(),
   tail_correction=false)`: cutoff relative to `σij`; shift modes are singleton types
   `NoShift`, `EnergyShift`, `ForceShift`. Tail corrections (energy and pressure, D = 2
-  and 3) only for `Additive` mixing (pair moments from single-particle moments, O(N)).
+  and 3) only for `Additive` mixing (pair moments from single-particle moments, O(N))
+  and `NoShift` (the pressure correction contains the impulsive term of the jump at the
+  cutoff, so it is inconsistent with a shifted potential).
 - `HardSphere(; mixing=Additive())`: `Inf` if `r2 < σij²`, else `0` (touching = no
   overlap). `is_repulsive = is_hard = true`. `pair_virial` throws (use `VirtualPressure`).
 - `PseudoHS(; epsilon=1.0, mixing=Additive())`: (50,49) pseudo hard sphere, as in
@@ -77,6 +80,10 @@ Cartesian out), `wrap_fractional(s)`, `fits_cutoff(box, rc)`, `dimension(box)`.
   convert to `T`, wrap into fractional coordinates, check lengths, `rc = max_cutoff`,
   `fits_cutoff(box, rc)` else `ArgumentError`, `check_symmetry` (with an internal fixed
   `Xoshiro`), build cells, compute energy; throw `ArgumentError` if the energy is `Inf`.
+  The running energy `sys.energy` has the type `E = energy_type(T) = float(promote_type(T,
+  Float64))` (last type parameter of `System{D,T,B,P,C,E}`), `Float64` for `Float32`
+  systems, so that volume moves (differences of total energies) are not dominated by
+  rounding; pair and particle energies stay in `T`.
 - Accessors: `Base.length(sys)`, `dimension(sys)`, `positions(sys)` (Cartesian copy),
   `diameters(sys)`, `volume(sys)`, `density(sys)`, `packing_fraction(sys)` (D = 2, 3).
 - Cell list (internals free) with these operations:
@@ -93,9 +100,9 @@ Cartesian out), `wrap_fractional(s)`, `fits_cutoff(box, rc)`, `dimension(box)`.
     `skip2` (use 0 for none). Stops early and returns a value `> emax` as soon as the
     partial sum exceeds `emax` when `is_repulsive(sys.potential)`.
   - `total_energy(sys; emax=Inf)` — full recompute including `energy_lrc`; same early
-    exit. Does not modify `sys`.
-  - `total_virial(sys)` — `W = Σ_{i<j} pair_virial`.
-  - `pressure(sys, kT)` — `ρ kT + W / (D V) + pressure_lrc`.
+    exit. Does not modify `sys`. Summed in (and returns) `energy_type(T)`.
+  - `total_virial(sys)` — `W = Σ_{i<j} pair_virial`, in `energy_type(T)`.
+  - `pressure(sys, kT)` — `ρ kT + W / (D V) + pressure_lrc`, in `energy_type(T)`.
   - `check_energy(sys) -> (running, recomputed)`; `sync_energy!(sys)` sets the running
     energy to the recomputed one.
 - Initialization: `box_for_density(Val(D), N, ρ)`, `box_for_packing_fraction(Val(D),
@@ -118,7 +125,9 @@ Cartesian out), `wrap_fractional(s)`, `fits_cutoff(box, rc)`, `dimension(box)`.
 ### `src/ensembles.jl`, `src/moves/*.jl`, `src/simulation.jl` (wave 2)
 - `abstract type Ensemble`; `NVT(kT)`, `NPT(kT, pressure)` (each a `Real` or a callable
   of the sweep number). `conditions(ens, sweep, T) -> NamedTuple` (`(; kT)` or
-  `(; kT, pressure)`), evaluated once per sweep.
+  `(; kT, pressure)`), evaluated once per sweep. Finite `kT ≥ 0` (`> 0` in NPT) and a
+  finite pressure, checked by the constructors for numbers and by `conditions` (an
+  `ArgumentError` naming the sweep) for callables.
 - `abstract type MCMove`; `attempt!(move, sys, cond, rng) -> Bool`; `name(move)::Symbol`.
   - `Displacement(δ=0.1; target=0.4, interval=1000, bounds=(1e-4, Inf))` — uniform in
     the cube `[-δ, δ]^D`; δ is also capped at half the smallest box width.
@@ -126,14 +135,17 @@ Cartesian out), `wrap_fractional(s)`, `fits_cutoff(box, rc)`, `dimension(box)`.
     are rejected without computing energies (still counted).
   - `VolumeMove(δlnV=0.01; target=0.3, interval=100, bounds=(1e-5, 1.0))` — isotropic,
     uniform in `ln V`; `ln A = -(ΔU + PΔV)/kT + (N+1) ΔlnV`. Rejected if the new box
-    violates `fits_cutoff`. Hard potentials skip the energy on expansion.
+    violates `fits_cutoff`. Hard potentials skip the energy on expansion (`is_hard`
+    requires pair energies `0`/`Inf` and non-increasing in `r`).
   - Shared `MoveStats` (attempts/accepts since `reset_stats!`) and `AdaptiveStep`
     (window counters, bounded multiplicative update `δ *= clamp(ratio/target, 2/3, 3/2)`,
     clamped to bounds).
 - `Simulation(system, ensemble, moves::Pair{<:MCMove,<:Real}...; seed, rng)` with
   fields `system, ensemble, moves::Tuple, cumweights::NTuple, rng, seed::UInt64,
   sweep::Int`. Validates: `VolumeMove` requires `NPT` and `NPT` requires a
-  `VolumeMove`; unique move names; positive weights (normalized).
+  `VolumeMove`; unique move names; positive weights (normalized). A task-local `rng`
+  (`Random.default_rng()`) is replaced by a `copy` (a `Xoshiro`), so that checkpoints
+  store its state.
 - `run!(sim, nsweeps; observers=(), adapt=false, energy_check=1000)`,
   `equilibrate!(sim, nsweeps; kw...) = run!(…; adapt=true)`. One sweep = N attempts.
   `reset_stats!(sim)`, `acceptance_rate(sim) -> NamedTuple`, `step_size(sim) ->
