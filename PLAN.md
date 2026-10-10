@@ -35,8 +35,9 @@ readable. Sibling of MolecularDynamics.jl and follows its conventions.
 4. **Mixing rules** (`src/mixing.jl`, done) are a type parameter of each potential:
    `Additive()`, `NonAdditive(ε)` with `0 ≤ ε < 1`.
 5. **Metropolis acceptance with a threshold drawn first.** Draw `ξ = randexp(rng, T)`;
-   accept iff `ln A > -ξ`, with `ln A = -ΔU/kT + bias`. Equivalently
-   `U_new < U_max := U_old + kT * (bias + ξ)`. `U_max` is known before the new energy is
+   accept iff `ln A ≥ -ξ`, with `ln A = -ΔU/kT + bias`. Equivalently
+   `U_new ≤ U_max := U_old + kT * (bias + ξ)` (`≤` so that `ΔU = 0` is always accepted,
+   also at `kT = 0`). `U_max` is known before the new energy is
    computed, so for `is_repulsive` potentials the energy sum stops as soon as it exceeds
    `U_max` (first overlap for hard spheres). Exactly Metropolis; never evaluates `exp`.
 6. **Step size tuning only in `equilibrate!`**, toward a per-move target acceptance
@@ -170,6 +171,7 @@ with MolecularDynamics.jl. Benchmarks in `benchmark/` against the original `swap
 
 ## Milestones
 
-0. Scaffold ✔ 1. Physics primitives 2. Cell list + energy 3. NVT + displacement +
-driver 4. Swap + IO 5. NPT + pressure 6. Ramps, checkpoints, docs 7. Performance
-(half-width cells, packed layout), anisotropic volume moves, triclinic boxes.
+0. Scaffold ✔ 1. Physics primitives ✔ 2. Cell list + energy ✔ 3. NVT + displacement +
+driver 4. Swap + IO (IO ✔) 5. NPT + pressure 6. Ramps (✔), checkpoints, docs
+7. Performance (half-width cells, packed layout), anisotropic volume moves, triclinic
+boxes.
