@@ -15,9 +15,9 @@ such as [`LinearRamp`](@ref). `kT = 0` gives a zero temperature quench.
 struct NVT{K} <: Ensemble
     kT::K
     function NVT(kT::K) where {K}
-        kT isa Real &&
-            !(kT >= 0) &&
+        if kT isa Real && !(kT >= 0)
             throw(ArgumentError("the temperature must be non-negative, got $(kT)"))
+        end
         return new{K}(kT)
     end
 end
@@ -32,12 +32,12 @@ struct NPT{K,P} <: Ensemble
     kT::K
     pressure::P
     function NPT(kT::K, pressure::P) where {K,P}
-        kT isa Real &&
-            !(kT > 0) &&
+        if kT isa Real && !(kT > 0)
             throw(ArgumentError("the temperature must be positive in NPT, got $(kT)"))
-        pressure isa Real &&
-            !isfinite(pressure) &&
+        end
+        if pressure isa Real && !isfinite(pressure)
             throw(ArgumentError("the pressure must be finite, got $(pressure)"))
+        end
         return new{K,P}(kT, pressure)
     end
 end
