@@ -126,13 +126,16 @@ function observe!(w::ThermoWriter, sim)
 end
 
 function Base.flush(w::ThermoWriter)
-    w.io === nothing || flush(w.io)
+    # Read the field once, so that the `nothing` check narrows its type.
+    io = w.io
+    io === nothing || flush(io)
     return nothing
 end
 
 function Base.close(w::ThermoWriter)
-    if w.io !== nothing
-        close(w.io)
+    io = w.io
+    if io !== nothing
+        close(io)
         w.io = nothing
     end
     return nothing
@@ -167,13 +170,16 @@ function observe!(w::TrajectoryWriter, sim)
 end
 
 function Base.flush(w::TrajectoryWriter)
-    w.io === nothing || flush(w.io)
+    # Read the field once, so that the `nothing` check narrows its type.
+    io = w.io
+    io === nothing || flush(io)
     return nothing
 end
 
 function Base.close(w::TrajectoryWriter)
-    if w.io !== nothing
-        close(w.io)
+    io = w.io
+    if io !== nothing
+        close(io)
         w.io = nothing
     end
     return nothing

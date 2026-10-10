@@ -55,24 +55,25 @@ function attempt!(m::Swap, sys::System{D,T}, cond::NamedTuple, rng::AbstractRNG)
     pot = sys.potential
     si = sys.frac[i]
     sj = sys.frac[j]
-    # Hard particles in a valid configuration never interact.
-    U_old = if is_hard(pot)
-        zero(T)
-    else
-        particle_energy(sys, si, σi, i, j, T(Inf)) + particle_energy(sys, sj, σj, j, i, T(Inf))
-    end
-    U_max = U_old + T(cond.kT) * randexp(rng, T)
-    if is_repulsive(pot)
-        # Energies are non-negative, so the swap is rejected as soon as either partial
-        # sum exceeds what is left of the threshold. A sum that stops early is only
-        # known to exceed its limit, so the limits are checked as well as the total.
+    kT = T(cond.kT)
+    if is_hard(pot)
+        # Hard particles in a valid configuration never interact, and the new energies
+        # are non-negative, so the swap is rejected as soon as either partial sum exceeds
+        # what is left of the threshold (the first overlap). A sum that stops early is
+        # only known to exceed its limit, so the limits are checked as well as the total.
+        U_old = zero(T)
+        U_max = U_old + kT * randexp(rng, T)
         Ui = particle_energy(sys, si, σj, i, j, U_max)
         Ui <= U_max || return record!(m, false)
         Uj = particle_energy(sys, sj, σi, j, i, U_max - Ui)
         accepted = (Uj <= U_max - Ui) & (Ui + Uj <= U_max)
     else
-        Ui = particle_energy(sys, si, σj, i, j, T(Inf))
-        Uj = particle_energy(sys, sj, σi, j, i, T(Inf))
+        # The old and new energies of each particle are at the same position, so both
+        # are summed in one pass over its neighbors (see `two_pair_sums`).
+        (Ui_old, Ui) = two_pair_sums(sys, si, σi, si, σj, i, j)
+        (Uj_old, Uj) = two_pair_sums(sys, sj, σj, sj, σi, j, i)
+        U_old = Ui_old + Uj_old
+        U_max = U_old + kT * randexp(rng, T)
         accepted = Ui + Uj <= U_max
     end
     if accepted

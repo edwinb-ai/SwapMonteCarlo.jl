@@ -27,12 +27,12 @@ cutoff(p::CLSoftSphere, σi, σj) = p.xc * SMC.mix(p.mixing, σi, σj)
 is_repulsive(::CLSoftSphere) = true
 
 """
-    cell_pairs(sys) -> Vector{Tuple{Int,Int}}
+    cell_pairs(sys, cells=sys.cells) -> Vector{Tuple{Int,Int}}
 
-All pairs `i < j` within their pair cutoff found through the cell list (duplicates kept).
+All pairs `i < j` within their pair cutoff found through the cell list `cells` (duplicates
+kept).
 """
-function cell_pairs(sys)
-    cells = sys.cells
+function cell_pairs(sys, cells=sys.cells)
     pairs = Tuple{Int,Int}[]
     for i in eachindex(sys.frac)
         c = SMC.cell_coordinates(cells, sys.frac[i])
@@ -67,7 +67,7 @@ function check_cells(sys)
         cells.slot_of[j] == k || return false
     end
     all(==(1), seen) || return false
-    fresh = SMC.CellList(sys.frac, sys.box, sys.rc)
+    fresh = SMC.CellList(sys.frac, sys.box, sys.rc; range=cells.range)
     fresh.ncells == cells.ncells || return false
     for cell in eachindex(cells.counts)
         a = Set(cells.members[1:cells.counts[cell], cell])
@@ -115,6 +115,11 @@ end
                 sys = System(box, x, σ, pot)
                 @test all(>=(3), sys.cells.ncells)
                 @test matches_brute(sys)
+                # The other cell range finds the same pairs.
+                other = SMC.CellList(sys.frac, sys.box, sys.rc; range=3 - sys.cells.range)
+                L = sys.box.lengths
+                @test Set(cell_pairs(sys, other)) ==
+                    brute_neighbors(L, positions(sys), sys.diameters, sys.potential)
             end
         end
     end
@@ -123,15 +128,18 @@ end
 @testset "few cells per side: no double counting" begin
     rng = test_rng(2)
     pot = GaussianCore(; A=1.0, rc=1.0)
-    for (lengths, expected) in (
-        ((2.01, 2.5, 3.5), (1, 2, 3)),
-        ((2.5, 2.01, 2.9), (2, 1, 2)),
-        ((3.5, 3.9, 2.02), (3, 3, 1)),
-        ((2.01, 2.01, 2.01), (1, 1, 1)),
-        ((2.01, 3.5), (1, 3)),
-        ((2.5, 2.5), (2, 2)),
-        ((2.02, 2.03), (1, 1)),
-        ((3.2, 7.0), (3, 6)),
+    # Expected cell counts with range 1 (cells at least rc wide) and range 2 (cells at
+    # least rc/2 wide, so up to 5 cells per side are still "few"). The total is capped at
+    # 2N cells.
+    for (lengths, expected1, expected2) in (
+        ((2.01, 2.5, 3.5), (1, 2, 3), (3, 4, 6)),
+        ((2.5, 2.01, 2.9), (2, 1, 2), (4, 3, 5)),
+        ((3.5, 3.9, 2.02), (3, 3, 1), (6, 6, 3)),
+        ((2.01, 2.01, 2.01), (1, 1, 1), (3, 3, 3)),
+        ((2.01, 3.5), (1, 3), (3, 6)),
+        ((2.5, 2.5), (2, 2), (4, 4)),
+        ((2.02, 2.03), (1, 1), (3, 3)),
+        ((3.2, 7.0), (3, 6), (6, 10)),
     )
         box = OrthorhombicBox(lengths...)
         D = length(lengths)
@@ -139,20 +147,29 @@ end
             N = D == 2 ? 30 : 60
             x = uniform_positions(rng, box.lengths, N)
             sys = System(box, x, ones(N), pot)
-            @test sys.cells.ncells == expected
             @test matches_brute(sys)
+            brute = brute_neighbors(box.lengths, positions(sys), sys.diameters, pot)
+            for (range, expected) in ((1, expected1), (2, expected2))
+                cells = SMC.CellList(sys.frac, sys.box, sys.rc; range=range)
+                @test cells.ncells == expected
+                pairs = cell_pairs(sys, cells)
+                @test length(pairs) == length(Set(pairs))
+                @test Set(pairs) == brute
+            end
         end
     end
 end
 
 @testset "incremental updates with cell_move!" begin
     rng = test_rng(3)
-    for D in (2, 3)
+    for D in (2, 3), range in (1, 2)
         N = 400
         box = SMC.box_for_density(Val(D), N, 0.8)
         x = uniform_positions(rng, box.lengths, N)
         σ = 0.7 .+ 0.6 .* rand(rng, N)
-        sys = System(box, x, σ, CLSoftSphere())
+        sys0 = System(box, x, σ, CLSoftSphere())
+        cells = SMC.CellList(sys0.frac, sys0.box, sys0.rc; range=range)
+        sys = System(sys0.frac, sys0.diameters, box, sys0.potential, cells, sys0.rc, 0.0)
         for step in 1:(10 ^ 4)
             i = rand(rng, 1:N)
             if isodd(step)

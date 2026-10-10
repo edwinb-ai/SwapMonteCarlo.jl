@@ -66,11 +66,21 @@ function attempt!(
     s_old = sys.frac[i]
     σ = sys.diameters[i]
     s_new = wrap_fractional(s_old + fractional(box, δ .* u))
-    # Hard particles in a valid configuration never interact.
-    U_old = is_hard(pot) ? zero(T) : particle_energy(sys, i)
-    U_max = U_old + T(cond.kT) * randexp(rng, T)
-    # The old position of `i` is excluded, so the cell list need not be updated first.
-    U_new = particle_energy(sys, s_new, σ, i, 0, U_max)
+    kT = T(cond.kT)
+    if !is_hard(pot) && linear_cell(sys.cells, s_new) == sys.cells.cell_of[i]
+        # Usual case: the particle stays in its cell, so the old and new energies have the
+        # same neighbor candidates and are summed in one pass (bitwise equal to separate
+        # sums, see `two_pair_sums`).
+        (U_old, U_new) = two_pair_sums(sys, s_old, σ, s_new, σ, Int(i), 0)
+        U_max = U_old + kT * randexp(rng, T)
+    else
+        # Hard particles in a valid configuration never interact.
+        U_old = is_hard(pot) ? zero(T) : particle_energy(sys, i)
+        U_max = U_old + kT * randexp(rng, T)
+        # The old position of `i` is excluded, so the cell list need not be updated
+        # first. For repulsive potentials the sum stops early once it exceeds `U_max`.
+        U_new = particle_energy(sys, s_new, σ, i, 0, U_max)
+    end
     accepted = U_new <= U_max
     if accepted
         sys.frac[i] = s_new

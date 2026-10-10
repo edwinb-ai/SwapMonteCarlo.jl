@@ -7,6 +7,16 @@ particles `j > jmin` in the system, excluding `skip1` and `skip2` (use `0` for n
 This is the kernel of every energy evaluation. When the potential is repulsive, it returns
 as soon as the partial sum exceeds `emax`, so the result is then only known to be larger
 than `emax`.
+
+# Performance
+
+Every candidate of the neighbor cells goes straight to `pair_energy`, which tests the
+pair cutoff itself. A cheaper global test `r2 < rc^2` before loading the diameter of `j`
+would only skip work for distant candidates, but it is a badly predicted branch (in the
+dense 2D soft sphere system about a third of the candidates pass it, in random order):
+removing it made displacements about 40% faster in 2D and 20% faster in 3D (see
+`benchmark/README.md`). Pairs beyond the largest cutoff contribute exactly zero, so the
+result is unchanged.
 """
 @inline function pair_sum(
     sys::System{D,T}, s::SVector{D,T}, σ::T, skip1::Int, skip2::Int, jmin::Int, emax::T
@@ -19,7 +29,6 @@ than `emax`.
     members = cells.members
     counts = cells.counts
     wrap = cells.wrap
-    rc2 = sys.rc * sys.rc
     c = cell_coordinates(cells, s)
     e = zero(T)
     @inbounds for I in CartesianIndices(cells.stencil)
@@ -29,8 +38,6 @@ than `emax`.
             ((j == skip1) | (j == skip2) | (j <= jmin)) && continue
             dx = min_image(box, frac[j] - s)
             r2 = dot(dx, dx)
-            # Cheap global prefilter before loading the diameter of `j`.
-            r2 < rc2 || continue
             e += convert(T, pair_energy(pot, r2, σ, diameters[j]))
             if is_repulsive(pot) && e > emax
                 return e
@@ -38,6 +45,61 @@ than `emax`.
         end
     end
     return e
+end
+
+"""
+    two_pair_sums(sys, sa, σa, sb, σb, skip1, skip2) -> (ea, eb)
+
+Energies of two (virtual) particles, one of diameter `σa` at the fractional position `sa`
+and one of diameter `σb` at `sb`, with all the particles except `skip1` and `skip2`,
+computed in a single pass over the neighbor cells. Both positions must lie in the same
+cell (`sa == sb` is allowed).
+
+Each energy is summed over the same particles in the same order as by
+[`pair_sum`](@ref) with `jmin = 0` and `emax = Inf`, so the results are bitwise equal to
+two separate calls. There is no early exit.
+
+# Performance
+
+The candidates of both positions are the same, so the loops over the cells, the loads of
+the neighbors' positions and diameters and, for equal positions, the distances are
+shared. A swap then needs two passes over the neighbors instead of four, and a
+displacement that stays in its cell one pass instead of two (see `benchmark/README.md`).
+"""
+@inline function two_pair_sums(
+    sys::System{D,T},
+    sa::SVector{D,T},
+    σa::T,
+    sb::SVector{D,T},
+    σb::T,
+    skip1::Int,
+    skip2::Int,
+) where {D,T}
+    cells = sys.cells
+    box = sys.box
+    pot = sys.potential
+    frac = sys.frac
+    diameters = sys.diameters
+    members = cells.members
+    counts = cells.counts
+    wrap = cells.wrap
+    c = cell_coordinates(cells, sa)
+    ea = zero(T)
+    eb = zero(T)
+    @inbounds for I in CartesianIndices(cells.stencil)
+        cell = neighbor_cell(wrap, c, I)
+        for k in 1:Int(counts[cell])
+            j = Int(members[k, cell])
+            ((j == skip1) | (j == skip2)) && continue
+            sj = frac[j]
+            σj = diameters[j]
+            dxa = min_image(box, sj - sa)
+            dxb = min_image(box, sj - sb)
+            ea += convert(T, pair_energy(pot, dot(dxa, dxa), σa, σj))
+            eb += convert(T, pair_energy(pot, dot(dxb, dxb), σb, σj))
+        end
+    end
+    return ea, eb
 end
 
 """

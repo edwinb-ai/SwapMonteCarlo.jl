@@ -43,7 +43,8 @@ The move of `sim` called `name`; throws an `ArgumentError` if there is none.
 """
 function find_move(sim, move_name::Symbol)
     for move in sim.moves
-        name(move) === move_name && return move
+        # The assertion keeps callers type stable when `sim` is not inferred.
+        name(move) === move_name && return move::MCMove
     end
     names = map(name, sim.moves)
     return throw(
@@ -156,10 +157,11 @@ Whether the neighbor stencil of `cells` contains every pair closer than `reach`.
 """
 function cells_cover(cells::CellList{D}, box::AbstractBox{D}, reach) where {D}
     widths = perpendicular_widths(box)
+    r = cells.range
     for d in 1:D
         n = cells.ncells[d]
-        # With one or two cells along `d` the stencil spans the whole dimension.
-        (n <= 2 || widths[d] >= n * reach) || return false
+        # With at most `2r` cells along `d` the stencil spans the whole dimension.
+        (n <= 2 * r || r * widths[d] >= n * reach) || return false
     end
     return true
 end
