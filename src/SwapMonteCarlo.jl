@@ -68,7 +68,7 @@ export write_extxyz, read_extxyz, save_checkpoint, load_checkpoint
 # Extension interface: not exported, but part of the public API.
 public AbstractBox, Potential, pair_energy, pair_virial, cutoff, max_cutoff
 public evaluate, evaluate_r2, is_repulsive, is_hard, energy_lrc, pressure_lrc
-public MixingRule, mix, SizeDistribution, quantile
+public MixingRule, mix, ShiftMode, SizeDistribution, quantile
 public Ensemble, MCMove, attempt!, Observer, observe!, Quantity, measure, label
 public Schedule, particle_energy, total_virial, check_energy
 
