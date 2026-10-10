@@ -134,7 +134,7 @@ end
 Reset `cells` to `ncells` empty cells along each dimension. Allocates.
 """
 function set_geometry!(cells::CellList{D,T}, ncells::NTuple{D,Int}) where {D,T}
-    strides = ntuple(d -> prod(ncells[1:(d - 1)]; init=1), Val(D))
+    strides = ntuple(d -> prod(ntuple(k -> ncells[k], d - 1); init=1), Val(D))
     total = prod(ncells)
     nparticles = length(cells.cell_of)
     capacity = 2 * cld(nparticles, total) + 8

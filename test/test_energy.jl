@@ -111,7 +111,7 @@ end
         U = total_energy(sys)
         @test U == total_energy(sys; emax=Inf)
         @test U == total_energy(sys; emax=2U)
-        @test 0.5U < total_energy(sys; emax=0.5U) <= U * (1 + 1e-12)
+        @test total_energy(sys; emax=0.5U) == Inf
 
         # Non-repulsive potentials ignore the threshold.
         sysg = make_system(rng, D, 200, 0.5, GaussianCore())

@@ -105,8 +105,8 @@ end
 Total potential energy recomputed from scratch, including the long range correction
 [`energy_lrc`](@ref). Does not modify `sys` (see [`sync_energy!`](@ref)).
 
-For repulsive potentials the sum stops as soon as it exceeds `emax`, and the returned
-value is then only known to be larger than `emax`.
+For repulsive potentials the sum stops as soon as it exceeds `emax`, and `Inf` is
+returned.
 """
 function total_energy(sys::System{D,T}; emax::Real=T(Inf)) where {D,T}
     lrc = convert(T, energy_lrc(sys.potential, sys))
@@ -116,10 +116,15 @@ function total_energy(sys::System{D,T}; emax::Real=T(Inf)) where {D,T}
     diameters = sys.diameters
     for i in eachindex(frac)
         # Half sum: particle `i` interacts with the particles `j > i` only.
-        e += pair_sum(sys, frac[i], diameters[i], 0, 0, i, limit - e)
-        if is_repulsive(sys.potential) && e > limit
-            return e + lrc
+        budget = limit - e
+        p = pair_sum(sys, frac[i], diameters[i], 0, 0, i, budget)
+        # Compare the partial sum with its own budget: after rounding, `e + p` could
+        # equal `limit` although the sum stopped early. Return a value that is certainly
+        # larger than `emax`.
+        if is_repulsive(sys.potential) && p > budget
+            return T(Inf)
         end
+        e += p
     end
     return e + lrc
 end
