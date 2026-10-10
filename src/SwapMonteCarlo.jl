@@ -69,7 +69,8 @@ export write_extxyz, read_extxyz, save_checkpoint, load_checkpoint
 public AbstractBox, Potential, pair_energy, pair_virial, cutoff, max_cutoff
 public evaluate, evaluate_r2, is_repulsive, is_hard, energy_lrc, pressure_lrc
 public MixingRule, mix, ShiftMode, SizeDistribution, quantile
-public Ensemble, MCMove, attempt!, Observer, observe!, Quantity, measure, label
+public Ensemble, conditions, MCMove, attempt!, name, MoveStats, AdaptiveStep, record!
+public adaptive_step, Observer, observe!, Quantity, measure, label, isdue
 public Schedule, particle_energy, total_virial, check_energy, sync_energy!
 
 end
