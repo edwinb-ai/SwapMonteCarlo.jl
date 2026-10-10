@@ -57,7 +57,7 @@ Write the `quantities` (see [`Quantity`](@ref)) as columns of a text file, one l
 due sweep, preceded by the sweep number.
 
 The file is created (overwriting an existing one) at the first due sweep and kept open
-across calls of [`run!`](@ref) until [`close`](@ref) is called (it is reopened in
+across calls of [`run!`](@ref) until `close` is called (it is reopened in
 append mode if the observer is used after closing it). Header lines start with `#` and
 give the package version, the seed of the simulation, the ensemble, the system and
 finally the column labels. Numbers are written with full precision, so the file can be
@@ -146,7 +146,7 @@ file `path` at every due sweep, with `Sweep` set to the sweep number. Frames can
 back with [`read_extxyz`](@ref)`(path; frame=k)`.
 
 The file is created (overwriting an existing one) at the first due sweep and kept open
-across calls of [`run!`](@ref) until [`close`](@ref) is called.
+across calls of [`run!`](@ref) until `close` is called.
 """
 mutable struct TrajectoryWriter{S<:Schedule} <: Observer
     const path::String

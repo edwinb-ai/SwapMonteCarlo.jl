@@ -143,7 +143,7 @@ Cartesian out), `wrap_fractional(s)`, `fits_cutoff(box, rc)`, `dimension(box)`.
 - `abstract type Schedule`, `isdue(schedule, sweep)`; `Every(n)`, `LogSchedule(; base=1.35,
   first=1)`.
 - `abstract type Quantity`; `measure(q, sim)`, `label(q)`: `PotentialEnergy()` (per
-  particle), `Pressure()` (virial), `VirtualPressure(; ξ=1e-4)` (hard potentials),
+  particle), `Pressure()` (virial), `VirtualPressure(; xi=1e-3)` (hard potentials),
   `Density()`, `PackingFraction()`, `Volume()`, `Acceptance(name)`, `StepSize(name)`.
 - `abstract type Observer`; `observe!(obs, sim)` called after every sweep;
   `Base.flush`, `Base.close`. `ThermoWriter(path, quantities...; schedule=Every(100))`,

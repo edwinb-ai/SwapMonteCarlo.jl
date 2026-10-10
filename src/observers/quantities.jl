@@ -131,7 +131,7 @@ xi)^(1/D)`.
 
 Pairs up to the distance `rc / f` (in the uncompressed box) are visited, which can exceed
 the cutoff `sys.rc`. The cell list of `sys` is used when its cells are wide enough (cells
-are built with a skin of [`CELL_SKIN`](@ref)); otherwise a temporary cell list is built.
+are built with a skin of `CELL_SKIN`); otherwise a temporary cell list is built.
 """
 function compression_overlaps(sys::System{D,T}, xi::Real) where {D,T}
     f = T((1 - xi)^(1 / D))

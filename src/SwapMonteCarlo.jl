@@ -70,7 +70,8 @@ public AbstractBox, Potential, pair_energy, pair_virial, cutoff, max_cutoff
 public evaluate, evaluate_r2, is_repulsive, is_hard, energy_lrc, pressure_lrc
 public MixingRule, mix, ShiftMode, SizeDistribution, quantile
 public Ensemble, conditions, MCMove, attempt!, name, MoveStats, AdaptiveStep, record!
-public adaptive_step, Observer, observe!, Quantity, measure, label, isdue
+public adaptive_step, move_stats, check_compatible, adapt!
+public Observer, observe!, Quantity, measure, label, isdue
 public Schedule, particle_energy, total_virial, check_energy, sync_energy!
 
 end

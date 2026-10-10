@@ -1,0 +1,9 @@
+[deps]
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+SwapMonteCarlo = "2613fd77-1dd0-448c-bdb1-104fdaa37f0b"
+
+[sources]
+SwapMonteCarlo = {path = ".."}
+
+[compat]
+Documenter = "1"

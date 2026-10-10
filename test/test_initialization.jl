@@ -13,9 +13,9 @@ is_repulsive(::IHardSphere) = true
 is_hard(::IHardSphere) = true
 
 """A potential whose pair energy is not symmetric in the diameters."""
-struct Asymmetric <: Potential end
-pair_energy(::Asymmetric, r2, σi, σj) = r2 < 1 ? σi : zero(r2)
-cutoff(::Asymmetric, σi, σj) = 1.0
+struct AsymmetricStep <: Potential end
+pair_energy(::AsymmetricStep, r2, σi, σj) = r2 < 1 ? σi : zero(r2)
+cutoff(::AsymmetricStep, σi, σj) = 1.0
 
 """
     min_distance(L, x) -> d
@@ -63,7 +63,7 @@ hard =
     # The cutoff (5.5) exceeds half the box width.
     @test_throws ArgumentError System(box, x, ones(10), GaussianCore(; rc=5.5))
     @test System(box, x, ones(10), GaussianCore(; rc=5.0)) isa System
-    @test_throws ArgumentError System(box, x, rand(rng, 10) .+ 0.5, Asymmetric())
+    @test_throws ArgumentError System(box, x, rand(rng, 10) .+ 0.5, AsymmetricStep())
     # Overlapping hard cores.
     y = copy(x)
     y[2] = y[1] + SVector(0.5, 0.0, 0.0)
